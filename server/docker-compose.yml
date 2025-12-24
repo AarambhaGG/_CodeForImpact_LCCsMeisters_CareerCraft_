@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: careercraft-backend:latest
+    container_name: careercraft_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-)27_uarj3+pnyr&6-(5aqd--!)%-4ld(!h9+q9t^fq3%&%x_r-
+      - ALLOWED_HOSTS=*,localhost,127.0.0.1
+    command: python manage.py runserver 0.0.0.0:8000
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  static_volume:
