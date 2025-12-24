@@ -21,7 +21,8 @@ RUN pip install --upgrade pip && \
 
 # Copy entrypoint script first
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Convert line endings and make executable
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Copy project
 COPY . /app/
