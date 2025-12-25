@@ -8,7 +8,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
+      {/* <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
           Welcome to CareerCraft
         </h1>
@@ -16,7 +16,7 @@ export default function Dashboard() {
           Your AI-powered career gap analysis and personalized roadmap to job
           readiness
         </p>
-      </div>
+      </div> */}
 
       {/* Stats Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">

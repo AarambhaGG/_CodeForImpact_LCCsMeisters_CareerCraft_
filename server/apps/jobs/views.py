@@ -1,6 +1,8 @@
 """
 Views for Jobs app
 """
+import json
+from django.http import StreamingHttpResponse
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -18,6 +20,7 @@ from .serializers import (
     ReanalyzeJobEligibilitySerializer,
 )
 from .services import JobEligibilityAnalyzer, DreamJobParser
+from .streaming_services import StreamingJobAnalyzer
 
 
 @extend_schema_view(
@@ -58,6 +61,57 @@ class JobViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save(update_fields=['view_count'])
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+    @extend_schema(
+        tags=['Jobs'],
+        summary='List analyzed jobs',
+        description='Get all jobs that the current user has analyzed, with their latest analysis data',
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def analyzed(self, request):
+        """
+        Get all jobs that the user has analyzed, with the latest analysis for each
+        """
+        from django.db.models import Max
+
+        # Get the latest analysis for each job
+        latest_analyses = (
+            JobEligibilityAnalysis.objects
+            .filter(user=request.user)
+            .values('job')
+            .annotate(latest_id=Max('id'))
+            .values_list('latest_id', flat=True)
+        )
+
+        # Get those analyses with job data
+        analyses = (
+            JobEligibilityAnalysis.objects
+            .filter(id__in=latest_analyses)
+            .select_related('job', 'user')
+            .order_by('-analyzed_at')
+        )
+
+        # Filter by eligibility level if provided
+        eligibility_level = request.query_params.get('eligibility_level')
+        if eligibility_level:
+            analyses = analyses.filter(eligibility_level=eligibility_level)
+
+        page = self.paginate_queryset(analyses)
+        if page is not None:
+            data = []
+            for analysis in page:
+                job_data = JobListSerializer(analysis.job).data
+                job_data['latest_analysis'] = JobEligibilityAnalysisSerializer(analysis).data
+                data.append(job_data)
+            return self.get_paginated_response(data)
+
+        data = []
+        for analysis in analyses:
+            job_data = JobListSerializer(analysis.job).data
+            job_data['latest_analysis'] = JobEligibilityAnalysisSerializer(analysis).data
+            data.append(job_data)
+
+        return Response(data)
 
     @extend_schema(
         tags=['Jobs'],
@@ -127,10 +181,59 @@ class JobEligibilityAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
             user=self.request.user
         ).select_related('job', 'user')
 
+    def list(self, request, *args, **kwargs):
+        """
+        List analyses grouped by job posting.
+        Returns only the most recent analysis for each unique job.
+        """
+        from django.db.models import Max
+
+        # Get all user's analyses
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # Get the latest analysis ID for each job
+        latest_analyses = (
+            queryset
+            .values('job')
+            .annotate(latest_id=Max('id'))
+            .values_list('latest_id', flat=True)
+        )
+
+        # Filter to only the latest analyses
+        queryset = queryset.filter(id__in=latest_analyses).order_by('-analyzed_at')
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return JobEligibilityAnalysisDetailSerializer
         return JobEligibilityAnalysisSerializer
+
+    @extend_schema(
+        tags=['Job Analysis'],
+        summary='Get all analyses for a specific job',
+        description='Get analysis history for a specific job (all analyses, not just the latest)',
+    )
+    @action(detail=False, methods=['get'], url_path='by-job/(?P<job_id>[^/.]+)')
+    def by_job(self, request, job_id=None):
+        """
+        Get all analyses for a specific job, ordered by date (newest first)
+        """
+        queryset = self.get_queryset().filter(job_id=job_id).order_by('-analyzed_at')
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         tags=['Job Analysis'],
@@ -402,3 +505,146 @@ class JobEligibilityAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
                 {'error': f'Dream job analysis failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @extend_schema(
+        tags=['Job Analysis'],
+        summary='Stream analyze dream job (SSE)',
+        description='Stream job analysis with real-time updates using Server-Sent Events',
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'job_description': {
+                        'type': 'string',
+                        'description': 'Job description text or dream job description',
+                    },
+                    'additional_context': {
+                        'type': 'string',
+                        'description': 'Optional additional context',
+                    },
+                    'save_job': {
+                        'type': 'boolean',
+                        'description': 'Whether to save the job (default: false)',
+                        'default': False,
+                    },
+                },
+                'required': ['job_description'],
+            }
+        },
+    )
+    @action(detail=False, methods=['post'])
+    def stream_analyze_dream_job(self, request):
+        """
+        Stream job analysis with real-time updates using Server-Sent Events
+
+        Returns a stream of events:
+        - status: Progress updates
+        - partial_metric: Metrics as they're calculated
+        - metrics_complete: All metrics calculated
+        - complete: Analysis finished
+        - error: Error occurred
+        """
+        job_description = request.data.get('job_description')
+        additional_context = request.data.get('additional_context', '')
+        save_job = request.data.get('save_job', False)
+
+        if not job_description:
+            return Response(
+                {'error': 'job_description is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        def event_stream():
+            """Generator for SSE events"""
+            try:
+                # Step 1: Parse job description
+                yield f"data: {json.dumps({'type': 'status', 'step': 'parsing', 'message': 'Parsing job description with AI...', 'progress': 5})}\n\n"
+
+                parser = DreamJobParser()
+                parsed_job_data = parser.parse_job_description(job_description)
+
+                yield f"data: {json.dumps({'type': 'status', 'step': 'parsed', 'message': 'Job description parsed successfully', 'progress': 15})}\n\n"
+
+                # Step 2: Create job object
+                if save_job:
+                    remote_policy = parsed_job_data.get("remote_policy", "REMOTE")
+                    if remote_policy == "FULLY_REMOTE":
+                        remote_policy = "REMOTE"
+                    elif remote_policy == "ON_SITE":
+                        remote_policy = "ONSITE"
+
+                    import uuid
+                    source_url = f"https://skillsetz.com/dream-jobs/{uuid.uuid4()}"
+
+                    job_kwargs = {
+                        "title": parsed_job_data.get("job_title", "Dream Job"),
+                        "company_name": parsed_job_data.get("company_name", "Dream Company"),
+                        "company_description": parsed_job_data.get("company_culture", ""),
+                        "job_type": parsed_job_data.get("job_type", "FULL_TIME"),
+                        "experience_level": parsed_job_data.get("experience_level", "MID"),
+                        "location": parsed_job_data.get("location", "Remote"),
+                        "is_remote": parsed_job_data.get("is_remote", True),
+                        "remote_policy": remote_policy,
+                        "description": parsed_job_data.get("description", ""),
+                        "responsibilities": "\n".join(
+                            [f"• {resp}" for resp in parsed_job_data.get("responsibilities", [])]
+                        ) if isinstance(parsed_job_data.get("responsibilities"), list) else str(parsed_job_data.get("responsibilities", "")),
+                        "requirements": "\n".join(
+                            [f"• {req.get('name', req) if isinstance(req, dict) else req}"
+                             for req in parsed_job_data.get("required_skills", [])]
+                        ),
+                        "salary_min": parsed_job_data.get("min_salary"),
+                        "salary_max": parsed_job_data.get("max_salary"),
+                        "source_url": source_url,
+                        "source_platform": "Dream Job (User Created)",
+                        "parsed_skills": parsed_job_data.get("required_skills", []) + parsed_job_data.get("preferred_skills", []),
+                        "parsed_requirements": parsed_job_data,
+                        "status": 'ACTIVE',
+                        "added_by": request.user,
+                    }
+
+                    if parsed_job_data.get("salary_currency"):
+                        job_kwargs["salary_currency"] = parsed_job_data.get("salary_currency")
+
+                    job = Job.objects.create(**job_kwargs)
+                    job_id = job.id
+                else:
+                    job = parser.create_temporary_job(parsed_job_data)
+                    job_id = None
+
+                # Step 3: Stream analysis
+                analyzer = StreamingJobAnalyzer()
+
+                for event in analyzer.stream_analyze_eligibility(
+                    user=request.user,
+                    job=job,
+                    additional_context=additional_context
+                ):
+                    # Forward all events to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                # Step 4: Send final data with job info
+                final_event = {
+                    'type': 'final',
+                    'parsed_job': parsed_job_data,
+                    'job_saved': save_job,
+                    'job_id': job_id,
+                    'job_url': f'/api/jobs/{job_id}/' if job_id else None,
+                }
+                yield f"data: {json.dumps(final_event)}\n\n"
+
+            except Exception as e:
+                error_event = {
+                    'type': 'error',
+                    'error': str(e),
+                    'message': f'Stream analysis failed: {str(e)}'
+                }
+                yield f"data: {json.dumps(error_event)}\n\n"
+
+        response = StreamingHttpResponse(
+            event_stream(),
+            content_type='text/event-stream'
+        )
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'
+        return response

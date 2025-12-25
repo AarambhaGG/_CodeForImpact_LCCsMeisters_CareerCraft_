@@ -133,14 +133,14 @@ export default function DreamJobPage() {
   return (
     <div className="space-y-8">
       {/* Header with back button */}
-      <div className="flex items-center gap-4">
+      {/* <div className="flex items-center gap-4">
         <Link href="/dashboard">
           <Button variant="ghost" size="sm" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
           </Button>
         </Link>
-      </div>
+      </div> */}
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto">

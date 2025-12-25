@@ -11,10 +11,15 @@ from .views import (
 
 app_name = 'jobs'
 
-router = DefaultRouter()
-router.register(r'', JobViewSet, basename='job')
-router.register(r'analyses', JobEligibilityAnalysisViewSet, basename='analysis')
+# Create separate routers to avoid URL pattern conflicts
+jobs_router = DefaultRouter()
+jobs_router.register(r'', JobViewSet, basename='job')
+
+analyses_router = DefaultRouter()
+analyses_router.register(r'', JobEligibilityAnalysisViewSet, basename='analysis')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    # Analyses must come BEFORE jobs to avoid pattern matching conflicts
+    path('analyses/', include(analyses_router.urls)),
+    path('', include(jobs_router.urls)),
 ]
