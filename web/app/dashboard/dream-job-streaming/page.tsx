@@ -210,7 +210,7 @@ export default function DreamJobStreamingPage() {
           {/* <Badge className="mb-4 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800">
             <Target className="h-3 w-3 mr-1" />
             Step 2: Define Your Dream Job (Streaming)
-          </Badge> */}
+          </Badge> */}  
           <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-3">
             Watch as our team conducts real-time analysis with evolving metrics
             to assess your fit.

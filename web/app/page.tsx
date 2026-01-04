@@ -294,8 +294,7 @@ export default function Home() {
                 <Link href="/login">
                   <Button
                     size="lg"
-                    variant="outline"
-                    className="border-2 border-white text-white hover:bg-white/10 text-lg h-12"
+                    className="border-2 border-white text-black dark:text-white hover:bg-white/10 text-lg h-12"
                   >
                     Sign In
                   </Button>
