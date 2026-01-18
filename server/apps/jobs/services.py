@@ -531,14 +531,28 @@ Be honest but constructive. If there are significant gaps, explain them clearly 
     ],
     "learning_resources": [
         {{
-            "resource_type": "COURSE/CERTIFICATION/BOOK/PROJECT/PRACTICE",
+            "resource_type": "COURSE/CERTIFICATION/BOOK/PROJECT/PRACTICE/DOCUMENTATION/VIDEO/BLOG",
             "title": "Resource title",
             "description": "What this resource covers",
+            "url": "Direct link to the resource (YouTube video, Udemy/Coursera course, official documentation, blog post, etc.)",
             "estimated_duration": "Time to complete",
             "priority": "HIGH/MEDIUM/LOW"
         }}
     ]
 }}
+
+**LEARNING RESOURCES URL GUIDELINES:**
+- ALWAYS include a working URL for each learning resource
+- For COURSE resources: Use actual course URLs from Udemy, Coursera, Pluralsight, LinkedIn Learning, etc.
+- For VIDEO resources: Use YouTube video/playlist URLs, freeCodeCamp, Traversy Media, etc.
+- For DOCUMENTATION: Use official documentation sites (e.g., https://reactnative.dev, https://redux-toolkit.js.org)
+- For BLOG: Use well-known tech blogs (Medium, Dev.to, official blogs)
+- For CERTIFICATION: Link to certification exam pages (AWS, Google Cloud, Microsoft, etc.)
+- For BOOK: Link to O'Reilly, Amazon, or publisher websites
+- For PRACTICE: Link to LeetCode, HackerRank, Codewars, or practice platforms
+- Prioritize free and high-quality resources when possible
+- Use official/authoritative sources for documentation and tutorials
+- Ensure URLs are complete and valid (start with https://)
 
 **SCORING GUIDELINES:**
 - skills_match_score: How well user's skills match job requirements (0-100)
