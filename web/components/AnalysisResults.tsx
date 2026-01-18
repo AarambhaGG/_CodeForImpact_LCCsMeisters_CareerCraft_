@@ -13,7 +13,8 @@ import {
   Target,
   Clock,
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  ExternalLink
 } from 'lucide-react';
 
 interface AnalysisResultsProps {
@@ -209,10 +210,25 @@ export function AnalysisResults({ analysis, parsedJob, onAskQuestion }: Analysis
           <CardContent>
             <div className="space-y-4">
               {analysis.learning_resources.map((resource: any, index: number) => (
-                <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <div
+                  key={index}
+                  className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 hover:border-blue-400 dark:hover:border-blue-600 transition-colors"
+                >
                   <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-semibold text-slate-900 dark:text-white">{resource.title}</h4>
-                    <Badge className="bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                    {resource.url ? (
+                      <a
+                        href={resource.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-2 group"
+                      >
+                        {resource.title}
+                        <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </a>
+                    ) : (
+                      <h4 className="font-semibold text-slate-900 dark:text-white">{resource.title}</h4>
+                    )}
+                    <Badge className="bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 shrink-0 ml-2">
                       {resource.priority}
                     </Badge>
                   </div>
