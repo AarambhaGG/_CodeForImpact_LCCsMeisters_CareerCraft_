@@ -242,6 +242,7 @@ class StreamingJobAnalyzer(JobEligibilityAnalyzer):
                 next_steps=ensure_list(result.get("next_steps", [])),
                 priority_improvements=ensure_list(result.get("priority_improvements", [])),
                 learning_resources=ensure_list(result.get("learning_resources", [])),
+                interview_questions=ensure_list(result.get("interview_questions", [])),
                 full_analysis=accumulated_content,
                 llm_model=self.model_name,
                 token_usage=0,

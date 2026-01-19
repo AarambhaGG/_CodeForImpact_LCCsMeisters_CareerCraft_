@@ -538,8 +538,37 @@ Be honest but constructive. If there are significant gaps, explain them clearly 
             "estimated_duration": "Time to complete",
             "priority": "HIGH/MEDIUM/LOW"
         }}
+    ],
+    "interview_questions": [
+        {{
+            "question": "The technical interview question text",
+            "category": "technical",
+            "difficulty": "easy/medium/hard",
+            "skills_tested": ["skill1", "skill2"],
+            "why_asked": "Explanation of why this question is relevant to the job and candidate profile",
+            "detailed_answer": "A comprehensive answer using STAR method (Situation, Task, Action, Result) with specific examples the candidate should mention based on their experience",
+            "key_points_to_cover": [
+                "Important point 1 that should be mentioned",
+                "Important point 2 with technical depth",
+                "Important point 3 showing impact"
+            ],
+            "common_mistakes": "What candidates often get wrong or forget to mention",
+            "follow_up_questions": ["Potential follow-up question 1", "Potential follow-up question 2"]
+        }}
     ]
 }}
+
+**INTERVIEW QUESTIONS GUIDELINES:**
+- Generate exactly 10 technical interview questions tailored to this specific job
+- Balance questions between showcasing the candidate's strengths (5 questions) and addressing their gaps (5 questions)
+- For strength-based questions: Focus on skills/experience the candidate has that match the job requirements
+- For gap-based questions: Focus on areas where the candidate needs improvement, but frame them constructively
+- Questions should be realistic and commonly asked in interviews for this role
+- Detailed answers should be 2-3 paragraphs using STAR method when applicable
+- Include specific examples from the candidate's experience where possible
+- Answers should demonstrate both technical knowledge and practical application
+- Mark difficulty based on the seniority level of the position
+- Ensure follow-up questions probe deeper into technical or behavioral aspects
 
 **LEARNING RESOURCES URL GUIDELINES:**
 - ALWAYS include a working URL for each learning resource
@@ -717,6 +746,8 @@ Return ONLY the JSON object, no additional text.
             next_steps=ensure_list(result.get("next_steps", [])),
             priority_improvements=ensure_list(result.get("priority_improvements", [])),
             learning_resources=ensure_list(result.get("learning_resources", [])),
+            # Interview preparation
+            interview_questions=ensure_list(result.get("interview_questions", [])),
             # Metadata
             full_analysis=response_text,
             llm_model=self.model_name,

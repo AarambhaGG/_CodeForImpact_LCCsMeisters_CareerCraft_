@@ -322,6 +322,11 @@ class JobEligibilityAnalysis(models.Model):
         default=list, help_text="Recommended courses, certifications, or resources"
     )
 
+    # Interview Preparation
+    interview_questions = models.JSONField(
+        default=list, help_text="Technical interview questions tailored to this job with detailed answers"
+    )
+
     # Full AI Response
     full_analysis = models.TextField(
         help_text="Complete AI-generated analysis"

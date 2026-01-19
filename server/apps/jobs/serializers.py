@@ -162,6 +162,8 @@ class JobEligibilityAnalysisSerializer(serializers.ModelSerializer):
             'next_steps',
             'priority_improvements',
             'learning_resources',
+            # Interview Preparation
+            'interview_questions',
             'analyzed_at',
             'llm_model',
         ]
@@ -196,6 +198,7 @@ class JobEligibilityAnalysisSerializer(serializers.ModelSerializer):
             'next_steps',
             'priority_improvements',
             'learning_resources',
+            'interview_questions',
             'analyzed_at',
             'llm_model',
         ]

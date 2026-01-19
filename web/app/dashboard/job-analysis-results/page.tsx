@@ -21,6 +21,9 @@ import {
   Sparkles,
   Briefcase,
   GraduationCap,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface JobAnalysisResult {
@@ -60,6 +63,7 @@ interface JobAnalysisResult {
   next_steps: string;
   priority_improvements: string;
   learning_resources: string;
+  interview_questions: string;
   analyzed_at: string;
   llm_model: string;
   full_analysis: string;
@@ -70,6 +74,7 @@ export default function JobAnalysisResultsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [analysisData, setAnalysisData] = useState<JobAnalysisResult | null>(null);
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const data = searchParams.get('data');
@@ -82,6 +87,18 @@ export default function JobAnalysisResultsPage() {
       }
     }
   }, [searchParams]);
+
+  const toggleQuestion = (index: number) => {
+    setExpandedQuestions((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
 
   if (!analysisData) {
     return (
@@ -593,6 +610,166 @@ export default function JobAnalysisResultsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Interview Questions */}
+        {analysisData.interview_questions && (() => {
+          try {
+            const questions = typeof analysisData.interview_questions === 'string'
+              ? JSON.parse(analysisData.interview_questions)
+              : analysisData.interview_questions;
+
+            if (Array.isArray(questions) && questions.length > 0) {
+              return (
+                <Card className="border-emerald-100 dark:border-emerald-900/50 mb-8">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                      <MessageSquare className="h-5 w-5" />
+                      Interview Questions
+                    </CardTitle>
+                    <CardDescription>
+                      Practice these {questions.length} technical questions tailored to this role
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {questions.map((q: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                        >
+                          <button
+                            onClick={() => toggleQuestion(idx)}
+                            className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start justify-between gap-3"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold text-sm shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <Badge
+                                  className={
+                                    q.difficulty === 'hard'
+                                      ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300'
+                                      : q.difficulty === 'medium'
+                                      ? 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300'
+                                      : 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300'
+                                  }
+                                >
+                                  {q.difficulty || 'medium'}
+                                </Badge>
+                              </div>
+                              <p className="text-slate-800 dark:text-slate-200 font-medium">
+                                {q.question}
+                              </p>
+                              {q.skills_tested && q.skills_tested.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {q.skills_tested.map((skill: string, skillIdx: number) => (
+                                    <Badge
+                                      key={skillIdx}
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {skill}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {expandedQuestions.has(idx) ? (
+                              <ChevronUp className="h-5 w-5 text-slate-400 shrink-0 mt-1" />
+                            ) : (
+                              <ChevronDown className="h-5 w-5 text-slate-400 shrink-0 mt-1" />
+                            )}
+                          </button>
+
+                          {expandedQuestions.has(idx) && (
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 space-y-4">
+                              {q.why_asked && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Why This Question?
+                                  </h4>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    {q.why_asked}
+                                  </p>
+                                </div>
+                              )}
+
+                              {q.detailed_answer && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
+                                    Suggested Answer
+                                  </h4>
+                                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                                    <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">
+                                      {q.detailed_answer}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {q.key_points_to_cover && q.key_points_to_cover.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Key Points to Cover
+                                  </h4>
+                                  <ul className="space-y-1">
+                                    {q.key_points_to_cover.map((point: string, pointIdx: number) => (
+                                      <li
+                                        key={pointIdx}
+                                        className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400"
+                                      >
+                                        <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                                        <span>{point}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {q.common_mistakes && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-red-700 dark:text-red-300 mb-1">
+                                    Common Mistakes to Avoid
+                                  </h4>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    {q.common_mistakes}
+                                  </p>
+                                </div>
+                              )}
+
+                              {q.follow_up_questions && q.follow_up_questions.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Potential Follow-up Questions
+                                  </h4>
+                                  <ul className="space-y-1">
+                                    {q.follow_up_questions.map((followUp: string, followUpIdx: number) => (
+                                      <li
+                                        key={followUpIdx}
+                                        className="text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2"
+                                      >
+                                        <span className="text-slate-400">•</span>
+                                        <span>{followUp}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
+          } catch (e) {
+            console.error('Failed to parse interview questions:', e);
+          }
+          return null;
+        })()}
 
         {/* Action Buttons */}
         <div className="flex gap-4 justify-center">
