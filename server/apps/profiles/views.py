@@ -612,3 +612,303 @@ class CertificationViewSet(viewsets.ModelViewSet):
         """Create certification for current user's profile"""
         profile, created = UserProfile.objects.get_or_create(user=self.request.user)
         serializer.save(profile=profile)
+
+
+# ============================================================================
+# Assessment ViewSets
+# ============================================================================
+
+from .models import AssessmentQuestion, SkillAssessment, AssessmentAnswer, SkillLevelCertificate, Skill
+from .serializers import (
+    AssessmentQuestionSerializer,
+    SkillAssessmentSerializer,
+    AssessmentAnswerSerializer,
+    SkillLevelCertificateSerializer,
+)
+from .assessment_service import AssessmentService
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Assessments'],
+        summary='List my assessments',
+        description='Get all skill assessments for the current user',
+    ),
+    retrieve=extend_schema(
+        tags=['Assessments'],
+        summary='Get assessment details',
+        description='Get details of a specific assessment including answers',
+    ),
+)
+class SkillAssessmentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for skill assessments
+    """
+    serializer_class = SkillAssessmentSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post']  # Only GET and POST allowed
+
+    def get_queryset(self):
+        """Get assessments for current user"""
+        return SkillAssessment.objects.filter(
+            user=self.request.user
+        ).select_related('skill').prefetch_related('answers')
+
+    @extend_schema(
+        tags=['Assessments'],
+        summary='Get available assessments',
+        description='Get all skills with available assessments and user progress',
+    )
+    @action(detail=False, methods=['get'])
+    def available(self, request):
+        """
+        Get all skills with available assessments and user's progress
+        """
+        service = AssessmentService()
+        
+        # Get all skills that have questions
+        skills_with_questions = Skill.objects.filter(
+            assessment_questions__is_active=True
+        ).distinct()
+        
+        result = []
+        for skill in skills_with_questions:
+            progress = service.get_skill_progress(request.user, skill)
+            result.append(progress)
+        
+        return Response(result)
+
+    @extend_schema(
+        tags=['Assessments'],
+        summary='Start a new assessment',
+        description='Start a new assessment for a skill at a specific level',
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'skill_id': {'type': 'integer'},
+                    'level': {'type': 'string', 'enum': ['LEVEL_1', 'LEVEL_2', 'LEVEL_3', 'LEVEL_4', 'LEVEL_5']},
+                },
+                'required': ['skill_id', 'level']
+            }
+        }
+    )
+    @action(detail=False, methods=['post'])
+    def start(self, request):
+        """
+        Start a new assessment for a skill at a specific level
+        """
+        skill_id = request.data.get('skill_id')
+        level = request.data.get('level')
+        
+        if not skill_id or not level:
+            return Response(
+                {'error': 'skill_id and level are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            skill = Skill.objects.get(id=skill_id)
+        except Skill.DoesNotExist:
+            return Response(
+                {'error': 'Skill not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        service = AssessmentService()
+        
+        try:
+            assessment = service.create_assessment(request.user, skill, level)
+            
+            # Get questions for this assessment
+            question_ids = getattr(assessment, 'selected_question_ids', [])
+            if not question_ids:
+                # Fallback: randomly select questions again
+                questions = list(AssessmentQuestion.objects.filter(
+                    skill=skill,
+                    level=level,
+                    is_active=True
+                )[:service.QUESTIONS_PER_LEVEL])
+            else:
+                questions = AssessmentQuestion.objects.filter(id__in=question_ids)
+            
+            # Serialize and return
+            assessment_data = SkillAssessmentSerializer(assessment).data
+            questions_data = AssessmentQuestionSerializer(questions, many=True).data
+            
+            return Response({
+                'assessment': assessment_data,
+                'questions': questions_data,
+            }, status=status.HTTP_201_CREATED)
+            
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @extend_schema(
+        tags=['Assessments'],
+        summary='Submit an answer',
+        description='Submit answer for a single question in an assessment',
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'question_id': {'type': 'integer'},
+                    'user_answer': {'type': 'string'},
+                    'time_taken_seconds': {'type': 'integer'},
+                },
+                'required': ['question_id', 'user_answer']
+            }
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def submit_answer(self, request, pk=None):
+        """
+        Submit answer for a single question
+        """
+        assessment = self.get_object()
+        question_id = request.data.get('question_id')
+        user_answer = request.data.get('user_answer')
+        time_taken = request.data.get('time_taken_seconds', 0)
+        
+        if not question_id or user_answer is None:
+            return Response(
+                {'error': 'question_id and user_answer are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            question = AssessmentQuestion.objects.get(id=question_id)
+        except AssessmentQuestion.DoesNotExist:
+            return Response(
+                {'error': 'Question not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        service = AssessmentService()
+        
+        try:
+            answer = service.submit_answer(
+                assessment,
+                question,
+                user_answer,
+                time_taken
+            )
+            
+            # Return answer with feedback
+            answer_data = AssessmentAnswerSerializer(answer).data
+            
+            # Include explanation if answer was submitted
+            if answer.is_correct is not None:
+                answer_data['explanation'] = question.explanation
+            
+            return Response(answer_data)
+            
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @extend_schema(
+        tags=['Assessments'],
+        summary='Complete assessment',
+        description='Complete the assessment and get final results',
+    )
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """
+        Complete the assessment and determine pass/fail
+        """
+        assessment = self.get_object()
+        service = AssessmentService()
+        
+        try:
+            completed_assessment = service.complete_assessment(assessment)
+            serializer = SkillAssessmentSerializer(completed_assessment)
+            return Response(serializer.data)
+            
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @extend_schema(
+        tags=['Assessments'],
+        summary='Get assessment history',
+        description='Get all assessment attempts for the current user',
+    )
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """
+        Get assessment history for user
+        """
+        skill_id = request.query_params.get('skill_id')
+        
+        service = AssessmentService()
+        
+        if skill_id:
+            try:
+                skill = Skill.objects.get(id=skill_id)
+                assessments = service.get_assessment_history(request.user, skill)
+            except Skill.DoesNotExist:
+                return Response(
+                    {'error': 'Skill not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            assessments = service.get_assessment_history(request.user)
+        
+        serializer = SkillAssessmentSerializer(assessments, many=True)
+        return Response(serializer.data)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Certificates'],
+        summary='List my certificates',
+        description='Get all skill level certificates for the current user',
+    ),
+    retrieve=extend_schema(
+        tags=['Certificates'],
+        summary='Get certificate details',
+        description='Get details of a specific certificate',
+    ),
+)
+class SkillLevelCertificateViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing skill level certificates
+    """
+    serializer_class = SkillLevelCertificateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Get active certificates for current user"""
+        return SkillLevelCertificate.objects.filter(
+            user=self.request.user,
+            is_active=True
+        ).select_related('skill', 'assessment')
+
+    @extend_schema(
+        tags=['Certificates'],
+        summary='Download certificate',
+        description='Download certificate as PDF',
+    )
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """
+        Generate and download PDF certificate
+        TODO: Implement PDF generation
+        """
+        certificate = self.get_object()
+        
+        # For now, return certificate data as JSON
+        # In Phase 5, we'll add PDF generation
+        serializer = SkillLevelCertificateSerializer(certificate)
+        return Response({
+            'message': 'PDF generation will be implemented in Phase 5',
+            'certificate': serializer.data
+        })

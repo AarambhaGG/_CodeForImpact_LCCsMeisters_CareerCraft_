@@ -11,6 +11,10 @@ from .models import (
     Skill,
     SkillCategory,
     UserSkill,
+    AssessmentQuestion,
+    SkillAssessment,
+    AssessmentAnswer,
+    SkillLevelCertificate,
 )
 
 
@@ -315,4 +319,247 @@ class UserSkillAdmin(admin.ModelAdmin):
 
     def get_user(self, obj):
         return obj.profile.user.email
+    get_user.short_description = 'User'
+
+
+@admin.register(AssessmentQuestion)
+class AssessmentQuestionAdmin(admin.ModelAdmin):
+    """
+    Admin interface for AssessmentQuestion model
+    """
+    list_display = [
+        'skill',
+        'level',
+        'question_type',
+        'points',
+        'time_limit_seconds',
+        'is_active',
+        'created_at',
+    ]
+    list_filter = [
+        'skill',
+        'level',
+        'question_type',
+        'is_active',
+        'created_at',
+    ]
+    search_fields = [
+        'skill__name',
+        'question_text',
+        'explanation',
+    ]
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['skill', 'level', '-created_at']
+    fieldsets = (
+        ('Question Details', {
+            'fields': (
+                'skill',
+                'level',
+                'question_type',
+                'is_active',
+            )
+        }),
+        ('Content', {
+            'fields': (
+                'question_text',
+                'code_snippet',
+                'options',
+                'correct_answer',
+                'explanation',
+            )
+        }),
+        ('Settings', {
+            'fields': (
+                'points',
+                'time_limit_seconds',
+            )
+        }),
+        ('Timestamps', {
+            'fields': (
+                'created_at',
+                'updated_at',
+            )
+        }),
+    )
+
+
+@admin.register(SkillAssessment)
+class SkillAssessmentAdmin(admin.ModelAdmin):
+    """
+    Admin interface for SkillAssessment model
+    """
+    list_display = [
+        'get_user',
+        'skill',
+        'level',
+        'status',
+        'percentage_score',
+        'questions_answered',
+        'total_questions',
+        'attempt_number',
+        'started_at',
+    ]
+    list_filter = [
+        'status',
+        'level',
+        'started_at',
+        'completed_at',
+    ]
+    search_fields = [
+        'user__email',
+        'user__first_name',
+        'user__last_name',
+        'skill__name',
+    ]
+    readonly_fields = [
+        'started_at',
+        'created_at',
+        'updated_at',
+        'percentage_score',
+        'points_earned',
+        'total_points',
+    ]
+    ordering = ['-started_at']
+    fieldsets = (
+        ('Assessment Info', {
+            'fields': (
+                'user',
+                'skill',
+                'level',
+                'status',
+                'attempt_number',
+                'previous_assessment',
+            )
+        }),
+        ('Timing', {
+            'fields': (
+                'started_at',
+                'completed_at',
+                'expires_at',
+                'time_spent_seconds',
+            )
+        }),
+        ('Scoring', {
+            'fields': (
+                'total_questions',
+                'questions_answered',
+                'total_points',
+                'points_earned',
+                'percentage_score',
+                'passing_score',
+            )
+        }),
+        ('Timestamps', {
+            'fields': (
+                'created_at',
+                'updated_at',
+            )
+        }),
+    )
+
+    def get_user(self, obj):
+        return obj.user.email
+    get_user.short_description = 'User'
+
+
+@admin.register(AssessmentAnswer)
+class AssessmentAnswerAdmin(admin.ModelAdmin):
+    """
+    Admin interface for AssessmentAnswer model
+    """
+    list_display = [
+        'get_user',
+        'get_skill',
+        'question',
+        'is_correct',
+        'points_earned',
+        'time_taken_seconds',
+        'answered_at',
+    ]
+    list_filter = [
+        'is_correct',
+        'answered_at',
+    ]
+    search_fields = [
+        'assessment__user__email',
+        'assessment__skill__name',
+        'question__question_text',
+    ]
+    readonly_fields = ['answered_at']
+    ordering = ['-answered_at']
+
+    def get_user(self, obj):
+        return obj.assessment.user.email
+    get_user.short_description = 'User'
+
+    def get_skill(self, obj):
+        return obj.assessment.skill.name
+    get_skill.short_description = 'Skill'
+
+
+@admin.register(SkillLevelCertificate)
+class SkillLevelCertificateAdmin(admin.ModelAdmin):
+    """
+    Admin interface for SkillLevelCertificate model
+    """
+    list_display = [
+        'get_user',
+        'skill',
+        'level',
+        'certificate_id',
+        'score_achieved',
+        'is_active',
+        'issued_at',
+    ]
+    list_filter = [
+        'level',
+        'is_active',
+        'issued_at',
+    ]
+    search_fields = [
+        'user__email',
+        'user__first_name',
+        'user__last_name',
+        'skill__name',
+        'certificate_id',
+    ]
+    readonly_fields = [
+        'certificate_id',
+        'issued_at',
+        'created_at',
+        'updated_at',
+    ]
+    ordering = ['-issued_at']
+    fieldsets = (
+        ('Certificate Info', {
+            'fields': (
+                'user',
+                'skill',
+                'level',
+                'assessment',
+                'certificate_id',
+            )
+        }),
+        ('Score', {
+            'fields': (
+                'score_achieved',
+            )
+        }),
+        ('Validity', {
+            'fields': (
+                'is_active',
+                'issued_at',
+                'expires_at',
+            )
+        }),
+        ('Timestamps', {
+            'fields': (
+                'created_at',
+                'updated_at',
+            )
+        }),
+    )
+
+    def get_user(self, obj):
+        return obj.user.email
     get_user.short_description = 'User'

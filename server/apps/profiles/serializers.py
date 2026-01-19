@@ -13,6 +13,10 @@ from .models import (
     Skill,
     SkillCategory,
     UserSkill,
+    AssessmentQuestion,
+    SkillAssessment,
+    AssessmentAnswer,
+    SkillLevelCertificate,
 )
 
 User = get_user_model()
@@ -392,3 +396,152 @@ class CompleteProfileSerializer(serializers.ModelSerializer):
 
     def get_user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
+
+# ============================================================================
+# Assessment Serializers
+# ============================================================================
+
+
+class AssessmentQuestionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for AssessmentQuestion model
+    NOTE: Does not expose correct_answer for security
+    """
+    skill_name = serializers.CharField(source='skill.name', read_only=True)
+    level_display = serializers.CharField(source='get_level_display', read_only=True)
+    question_type_display = serializers.CharField(source='get_question_type_display', read_only=True)
+
+    class Meta:
+        model = AssessmentQuestion
+        fields = [
+            'id',
+            'skill',
+            'skill_name',
+            'level',
+            'level_display',
+            'question_type',
+            'question_type_display',
+            'question_text',
+            'code_snippet',
+            'options',
+            'points',
+            'time_limit_seconds',
+            # Note: correct_answer and explanation excluded for security
+        ]
+        read_only_fields = ['id']
+
+
+class AssessmentAnswerSerializer(serializers.ModelSerializer):
+    """
+    Serializer for AssessmentAnswer model
+    """
+    question_text = serializers.CharField(source='question.question_text', read_only=True)
+    question_details = AssessmentQuestionSerializer(source='question', read_only=True)
+
+    class Meta:
+        model = AssessmentAnswer
+        fields = [
+            'id',
+            'assessment',
+            'question',
+            'question_text',
+            'question_details',
+            'user_answer',
+            'is_correct',
+            'points_earned',
+            'time_taken_seconds',
+            'answered_at',
+        ]
+        read_only_fields = ['id', 'is_correct', 'points_earned', 'answered_at']
+
+
+class SkillLevelCertificateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for SkillLevelCertificate model
+    """
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    skill_name = serializers.CharField(source='skill.name', read_only=True)
+    level_display = serializers.CharField(source='get_level_display', read_only=True)
+
+    class Meta:
+        model = SkillLevelCertificate
+        fields = [
+            'id',
+            'user',
+            'user_email',
+            'skill',
+            'skill_name',
+            'level',
+            'level_display',
+            'assessment',
+            'certificate_id',
+            'score_achieved',
+            'issued_at',
+            'is_active',
+            'expires_at',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'user', 'certificate_id', 'issued_at', 'created_at', 'updated_at']
+
+
+class SkillAssessmentSerializer(serializers.ModelSerializer):
+    """
+    Serializer for SkillAssessment model
+    """
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    skill_name = serializers.CharField(source='skill.name', read_only=True)
+    level_display = serializers.CharField(source='get_level_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    answers = AssessmentAnswerSerializer(many=True, read_only=True)
+    certificate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SkillAssessment
+        fields = [
+            'id',
+            'user',
+            'user_email',
+            'skill',
+            'skill_name',
+            'level',
+            'level_display',
+            'status',
+            'status_display',
+            'started_at',
+            'completed_at',
+            'expires_at',
+            'total_questions',
+            'questions_answered',
+            'total_points',
+            'points_earned',
+            'percentage_score',
+            'passing_score',
+            'time_spent_seconds',
+            'attempt_number',
+            'previous_assessment',
+            'answers',
+            'certificate',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'user',
+            'started_at',
+            'created_at',
+            'updated_at',
+            'total_questions',
+            'questions_answered',
+            'total_points',
+            'points_earned',
+            'percentage_score',
+            'time_spent_seconds',
+        ]
+
+    def get_certificate(self, obj):
+        """Get certificate if assessment was passed"""
+        if hasattr(obj, 'certificate'):
+            return SkillLevelCertificateSerializer(obj.certificate).data
+        return None

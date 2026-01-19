@@ -10,6 +10,8 @@ from .views import (
     WorkExperienceViewSet,
     ProjectViewSet,
     CertificationViewSet,
+    SkillAssessmentViewSet,
+    SkillLevelCertificateViewSet,
 )
 
 app_name = 'profiles'
@@ -20,6 +22,8 @@ router.register(r'education', EducationViewSet, basename='education')
 router.register(r'work-experience', WorkExperienceViewSet, basename='work-experience')
 router.register(r'projects', ProjectViewSet, basename='project')
 router.register(r'certifications', CertificationViewSet, basename='certification')
+router.register(r'assessments', SkillAssessmentViewSet, basename='assessment')
+router.register(r'certificates', SkillLevelCertificateViewSet, basename='certificate')
 
 urlpatterns = [
     path('', include(router.urls)),

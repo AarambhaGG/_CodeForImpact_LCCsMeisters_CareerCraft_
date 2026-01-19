@@ -334,3 +334,205 @@ class UserSkill(models.Model):
 
     def __str__(self):
         return f"{self.skill.name} ({self.proficiency_level})"
+
+
+class AssessmentQuestion(models.Model):
+    """
+    Pre-built questions for skill assessments
+    """
+
+    class QuestionType(models.TextChoices):
+        MULTIPLE_CHOICE = "MULTIPLE_CHOICE", _("Multiple Choice")
+        TRUE_FALSE = "TRUE_FALSE", _("True/False")
+        CODE_SNIPPET = "CODE_SNIPPET", _("Code Snippet")
+        SCENARIO = "SCENARIO", _("Scenario-based")
+
+    class DifficultyLevel(models.TextChoices):
+        LEVEL_1 = "LEVEL_1", _("Level 1 - Beginner")
+        LEVEL_2 = "LEVEL_2", _("Level 2 - Intermediate")
+        LEVEL_3 = "LEVEL_3", _("Level 3 - Advanced")
+        LEVEL_4 = "LEVEL_4", _("Level 4 - Expert")
+        LEVEL_5 = "LEVEL_5", _("Level 5 - Master")
+
+    skill = models.ForeignKey(
+        Skill, on_delete=models.CASCADE, related_name="assessment_questions"
+    )
+    level = models.CharField(max_length=20, choices=DifficultyLevel.choices)
+    question_type = models.CharField(max_length=20, choices=QuestionType.choices)
+
+    # Question content
+    question_text = models.TextField()
+    code_snippet = models.TextField(blank=True)  # For code-based questions
+    options = models.JSONField(default=list)  # List of answer options
+    correct_answer = models.TextField()  # Correct answer or answer key
+    explanation = models.TextField(blank=True)  # Explanation shown after answering
+
+    # Metadata
+    points = models.IntegerField(default=10)  # Points for this question
+    time_limit_seconds = models.IntegerField(default=120)  # Time limit per question
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "assessment_questions"
+        verbose_name = _("Assessment Question")
+        verbose_name_plural = _("Assessment Questions")
+        indexes = [
+            models.Index(fields=["skill", "level"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.skill.name} - {self.level} - {self.question_type}"
+
+
+class SkillAssessment(models.Model):
+    """
+    User's assessment attempts for a specific skill level
+    """
+
+    class AssessmentStatus(models.TextChoices):
+        IN_PROGRESS = "IN_PROGRESS", _("In Progress")
+        COMPLETED = "COMPLETED", _("Completed")
+        PASSED = "PASSED", _("Passed")
+        FAILED = "FAILED", _("Failed")
+        EXPIRED = "EXPIRED", _("Expired")
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="skill_assessments"
+    )
+    skill = models.ForeignKey(
+        Skill, on_delete=models.CASCADE, related_name="assessments"
+    )
+    level = models.CharField(
+        max_length=20, choices=AssessmentQuestion.DifficultyLevel.choices
+    )
+
+    # Assessment metadata
+    status = models.CharField(
+        max_length=20,
+        choices=AssessmentStatus.choices,
+        default=AssessmentStatus.IN_PROGRESS,
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(
+        null=True, blank=True
+    )  # Time limit for completion
+
+    # Scoring
+    total_questions = models.IntegerField(default=0)
+    questions_answered = models.IntegerField(default=0)
+    total_points = models.IntegerField(default=0)
+    points_earned = models.IntegerField(default=0)
+    percentage_score = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0
+    )
+    passing_score = models.DecimalField(
+        max_digits=5, decimal_places=2, default=70.00
+    )  # 70% to pass
+
+    # Time tracking
+    time_spent_seconds = models.IntegerField(default=0)
+
+    # Retake tracking
+    attempt_number = models.IntegerField(default=1)
+    previous_assessment = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="retakes",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "skill_assessments"
+        verbose_name = _("Skill Assessment")
+        verbose_name_plural = _("Skill Assessments")
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["user", "skill", "level"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.skill.name} ({self.level}) - {self.status}"
+
+
+class AssessmentAnswer(models.Model):
+    """
+    User's answers for assessment questions
+    """
+
+    assessment = models.ForeignKey(
+        SkillAssessment, on_delete=models.CASCADE, related_name="answers"
+    )
+    question = models.ForeignKey(
+        AssessmentQuestion, on_delete=models.CASCADE, related_name="user_answers"
+    )
+
+    # Answer data
+    user_answer = models.TextField()
+    is_correct = models.BooleanField(default=False)
+    points_earned = models.IntegerField(default=0)
+
+    # Timing
+    time_taken_seconds = models.IntegerField(default=0)
+    answered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "assessment_answers"
+        verbose_name = _("Assessment Answer")
+        verbose_name_plural = _("Assessment Answers")
+        unique_together = ["assessment", "question"]
+
+    def __str__(self):
+        return f"{self.assessment.user.email} - Q{self.question.id} - {'✓' if self.is_correct else '✗'}"
+
+
+class SkillLevelCertificate(models.Model):
+    """
+    Certificates awarded for passing assessments
+    """
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="skill_certificates"
+    )
+    skill = models.ForeignKey(
+        Skill, on_delete=models.CASCADE, related_name="certificates"
+    )
+    level = models.CharField(
+        max_length=20, choices=AssessmentQuestion.DifficultyLevel.choices
+    )
+    assessment = models.OneToOneField(
+        SkillAssessment, on_delete=models.CASCADE, related_name="certificate"
+    )
+
+    # Certificate details
+    certificate_id = models.CharField(
+        max_length=100, unique=True, db_index=True
+    )  # UUID-based
+    score_achieved = models.DecimalField(max_digits=5, decimal_places=2)
+    issued_at = models.DateTimeField(auto_now_add=True)
+
+    # Validity
+    is_active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)  # Optional expiry
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "skill_level_certificates"
+        verbose_name = _("Skill Level Certificate")
+        verbose_name_plural = _("Skill Level Certificates")
+        unique_together = ["user", "skill", "level"]
+        ordering = ["-issued_at"]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.skill.name} ({self.level}) - {self.certificate_id}"
