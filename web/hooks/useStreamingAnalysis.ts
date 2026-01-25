@@ -89,12 +89,12 @@ export function useStreamingAnalysis(): UseStreamingAnalysisReturn {
 
     try {
       const token = Cookies.get('access_token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
 
       // For SSE, we need to use fetch with a streaming response
       abortControllerRef.current = new AbortController();
 
-      const response = await fetch(`${apiUrl}/api/jobs/analyses/stream_analyze_dream_job/`, {
+      const response = await fetch(`${apiBaseUrl}/jobs/analyses/stream_analyze_dream_job/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -11,6 +11,8 @@ services:
       - .:/app
       - /app/.venv
       - static_volume:/app/staticfiles
+    env_file:
+      - .env
     environment:
       - DEBUG=True
       - SECRET_KEY=django-insecure-)27_uarj3+pnyr&6-(5aqd--!)%-4ld(!h9+q9t^fq3%&%x_r-
